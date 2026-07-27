@@ -14,19 +14,31 @@ class GcpClients:
     # Read-only scope is enough for validation.
     SCOPES = ["https://www.googleapis.com/auth/cloud-platform.read-only"]
 
-    def __init__(self, project: str, credentials: Any = None):
+    def __init__(self, project: str, credentials: Any = None, key_file: Optional[str] = None):
         self.project = project
         self._credentials = credentials
+        self._key_file = key_file
         self._discovery: Dict[str, Any] = {}
         self._logging_client = None
 
     @property
     def credentials(self):
         if self._credentials is None:
-            import google.auth
-            self._credentials, adc_project = google.auth.default(scopes=self.SCOPES)
-            if not self.project:
-                self.project = adc_project
+            if self._key_file:
+                # Explicit service-account JSON key file.
+                from google.oauth2 import service_account
+                creds = service_account.Credentials.from_service_account_file(
+                    self._key_file, scopes=self.SCOPES)
+                self._credentials = creds
+                if not self.project:
+                    self.project = getattr(creds, "project_id", "") or ""
+            else:
+                # Application Default Credentials (gcloud ADC or
+                # $GOOGLE_APPLICATION_CREDENTIALS).
+                import google.auth
+                self._credentials, adc_project = google.auth.default(scopes=self.SCOPES)
+                if not self.project:
+                    self.project = adc_project
         return self._credentials
 
     def discovery(self, api: str, version: str):

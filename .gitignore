@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Generated validation reports
+*.xlsx
+
+# Credentials — never commit service-account keys
+*sa*.json
+*service-account*.json
+*credentials*.json
+!gcpval/data/gcp_checks.json
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp

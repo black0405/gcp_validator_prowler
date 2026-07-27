@@ -37,14 +37,21 @@ python -m venv .venv && . .venv/bin/activate      # (Windows: .venv\Scripts\acti
 pip install -r requirements.txt
 ```
 
-## Authenticate (Application Default Credentials)
+## Authenticate
 
-Either works — the tool only needs **read-only** access:
+The tool only needs **read-only** access, and takes credentials three ways
+(first match wins):
 
 ```bash
-gcloud auth application-default login          # user credentials
-# or
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa-key.json   # service account
+# 1. Pass the service-account JSON key directly:
+python run_all.py --key-file /path/to/sa-key.json --prowler out.ocsf.json
+#    (project defaults to the key's own project_id if you omit --project)
+
+# 2. Or via the standard env var:
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa-key.json
+
+# 3. Or user credentials from gcloud:
+gcloud auth application-default login
 ```
 
 Recommended read roles: `roles/cloudsql.viewer`, `roles/logging.viewer`

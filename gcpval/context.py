@@ -25,9 +25,10 @@ class ValidationContext:
         project: str,
         prowler_path: str = "",
         credentials: Any = None,
+        key_file: str = "",
         **opts: Any,
     ) -> "ValidationContext":
-        clients = GcpClients(project=project, credentials=credentials)
+        clients = GcpClients(project=project, credentials=credentials, key_file=key_file or None)
         prowler = ProwlerReport.load(prowler_path) if prowler_path else ProwlerReport([])
         ctx = cls(project=project, clients=clients, prowler=prowler)
         for k, v in opts.items():
