@@ -5,7 +5,7 @@ from typing import Iterable, List
 
 from .models import (
     AGREE, INCONCLUSIVE, LIKELY_FALSE_NEGATIVE, LIKELY_FALSE_POSITIVE,
-    NO_PROWLER, CheckResult, Method, ResourceResult, Verdict,
+    NOT_EVALUATED, NO_PROWLER, CheckResult, Method, ResourceResult, Verdict,
 )
 
 COLUMNS = [
@@ -25,7 +25,8 @@ _FILLS = {
     LIKELY_FALSE_POSITIVE: "FFF6C244",   # amber — Prowler FAIL we could not confirm
     LIKELY_FALSE_NEGATIVE: "FFE06666",   # red   — Prowler PASS but we found a problem
     AGREE: "FFB6D7A8",                   # green — verdicts match
-    INCONCLUSIVE: "FFD9D9D9",            # grey
+    INCONCLUSIVE: "FFD9D9D9",            # grey  — ran, but no definite signal (needs review)
+    NOT_EVALUATED: "FFF9CB9C",           # orange — could not run (fix access / API / permission)
     NO_PROWLER: "FFFFFFFF",
 }
 
@@ -44,7 +45,7 @@ def _rows_for_check(cr: CheckResult, deeplink_fn=None) -> Iterable[List[str]]:
             cr.check_id, cr.service, cr.severity, cr.title, cr.hub_link,
             "", "", "", "", "", "",
             "", "", "", "", "", "", "", "", "", "",
-            Verdict.NA.value, INCONCLUSIVE if not cr.error else "ERROR",
+            Verdict.NA.value, NOT_EVALUATED if cr.error else NO_PROWLER,
             cr.error or "no resources evaluated", "",
         ]
         return
@@ -92,7 +93,7 @@ def write_report(check_results: List[CheckResult], out_path: str, deeplink_fn=No
         cell.alignment = Alignment(vertical="center", wrap_text=True)
 
     counts = {AGREE: 0, LIKELY_FALSE_POSITIVE: 0, LIKELY_FALSE_NEGATIVE: 0,
-              INCONCLUSIVE: 0, NO_PROWLER: 0}
+              INCONCLUSIVE: 0, NOT_EVALUATED: 0, NO_PROWLER: 0}
 
     r = 1
     for cr in sorted(check_results, key=lambda x: (x.service, x.check_id)):
@@ -132,7 +133,8 @@ def write_report(check_results: List[CheckResult], out_path: str, deeplink_fn=No
     summ.cell(row=1, column=2).font = Font(bold=True)
     summ.append(["Checks evaluated", len(check_results)])
     summ.append(["Resource rows", r - 1])
-    for k in (AGREE, LIKELY_FALSE_POSITIVE, LIKELY_FALSE_NEGATIVE, INCONCLUSIVE, NO_PROWLER):
+    for k in (AGREE, LIKELY_FALSE_POSITIVE, LIKELY_FALSE_NEGATIVE, INCONCLUSIVE,
+              NOT_EVALUATED, NO_PROWLER):
         summ.append([k, counts.get(k, 0)])
     summ.column_dimensions["A"].width = 28
     summ.column_dimensions["B"].width = 12

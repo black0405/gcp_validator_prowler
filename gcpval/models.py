@@ -71,7 +71,8 @@ class MethodResult:
 AGREE = "AGREE"
 LIKELY_FALSE_POSITIVE = "LIKELY_FALSE_POSITIVE"    # Prowler FAIL, our consensus PASS
 LIKELY_FALSE_NEGATIVE = "LIKELY_FALSE_NEGATIVE"    # Prowler PASS, our consensus FAIL
-INCONCLUSIVE = "INCONCLUSIVE"                       # not enough automated signal
+INCONCLUSIVE = "INCONCLUSIVE"                       # evaluated, but no definite automated signal (needs review)
+NOT_EVALUATED = "NOT_EVALUATED"                     # could not run: auth/permission/API-disabled/resource-not-found
 NO_PROWLER = "NO_PROWLER_FINDING"                   # nothing to compare against
 
 
@@ -85,6 +86,10 @@ class ResourceResult:
     methods: Dict[Method, MethodResult] = field(default_factory=dict)
     prowler_status: Optional[Verdict] = None
     prowler_detail: str = ""
+    #: True when the resource could not be evaluated (discovery failed, resource
+    #: not found live, insufficient scope/permission) — distinct from a genuine
+    #: "inconclusive" where methods ran but reached no definite verdict.
+    blocked: bool = False
 
     def add(self, result: MethodResult) -> None:
         self.methods[result.method] = result
@@ -110,18 +115,25 @@ class ResourceResult:
         # Mixed signal: lean conservative (a confirmed problem outweighs a clean read).
         return Verdict.FAIL if fails >= passes else Verdict.PASS
 
+    def _has_error_method(self) -> bool:
+        return any(r.verdict is Verdict.ERROR for m, r in self.methods.items()
+                   if m != Method.PROWLER_REPLICA)
+
     def agreement(self) -> str:
         if self.prowler_status is None:
             return NO_PROWLER
         cons = self.consensus()
-        if not cons.is_definite:
-            return INCONCLUSIVE
-        if cons == self.prowler_status:
-            return AGREE
-        if self.prowler_status is Verdict.FAIL and cons is Verdict.PASS:
-            return LIKELY_FALSE_POSITIVE
-        if self.prowler_status is Verdict.PASS and cons is Verdict.FAIL:
-            return LIKELY_FALSE_NEGATIVE
+        if cons.is_definite:
+            if cons == self.prowler_status:
+                return AGREE
+            if self.prowler_status is Verdict.FAIL and cons is Verdict.PASS:
+                return LIKELY_FALSE_POSITIVE
+            if self.prowler_status is Verdict.PASS and cons is Verdict.FAIL:
+                return LIKELY_FALSE_NEGATIVE
+        # No definite consensus. Separate "couldn't run" (fix access) from a
+        # genuine "needs human review" (methods ran but are N/A / MANUAL).
+        if self.blocked or self._has_error_method():
+            return NOT_EVALUATED
         return INCONCLUSIVE
 
 

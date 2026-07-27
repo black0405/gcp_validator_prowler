@@ -158,8 +158,10 @@ class BaseCheck:
                 region=f.region,
                 prowler_status=f.status,
                 prowler_detail=f.status_detail,
+                blocked=True,   # not evaluated live — reported as NOT_EVALUATED, not INCONCLUSIVE
             )
-            reason = "resource not found in live discovery (deleted, different project, or insufficient permissions)"
+            reason = (result.error or
+                      "resource not found in live discovery (deleted, different project, or insufficient permissions)")
             for method, _ in self._METHOD_FNS:
                 rr.add(MethodResult.na(method, reason))
             result.add(rr)
