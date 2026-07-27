@@ -11,8 +11,11 @@ from typing import Any, Dict, List, Optional
 
 
 class GcpClients:
-    # Read-only scope is enough for validation.
-    SCOPES = ["https://www.googleapis.com/auth/cloud-platform.read-only"]
+    # Full cloud-platform scope. We only ever GET/list (never write), but several
+    # admin APIs (e.g. Cloud SQL Admin) reject the narrower cloud-platform.read-only
+    # scope with "insufficient authentication scopes", so read-only is unusable here.
+    # Effective access is still governed by the principal's IAM roles (use Viewer).
+    SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
 
     def __init__(self, project: str, credentials: Any = None, key_file: Optional[str] = None):
         self.project = project

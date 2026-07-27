@@ -105,6 +105,42 @@ Images are generated headless (Pillow) from data the tool already collected, so
 they carry provenance (API source + timestamp) suitable as audit evidence; the
 deep-link lets you also grab a live console screenshot if a reviewer wants one.
 
+## Troubleshooting errors in the report
+
+The **Check Error** column classifies operational problems (these are about your
+environment/credentials, not the checks):
+
+- **`AUTH SCOPE — … lacks the cloud-platform scope`** — the token can't call the
+  admin APIs. This is common when running on a **GCE VM / Cloud Shell** whose
+  service account has restricted access scopes (the requested scope is ignored
+  there). Fix: run with a **service-account key** (`--key-file key.json`), or
+  `gcloud auth application-default login` as a user with the `cloud-platform`
+  scope, or recreate the VM with `--scopes=cloud-platform`.
+- **`PERMISSION DENIED — grant … roles/viewer`** — the scope is fine but the
+  principal lacks IAM read access. Grant the SA/user **`roles/viewer`** (add
+  **`roles/iam.securityReviewer`** for full IAM policy reads, and
+  **`roles/cloudasset.viewer`** for asset checks).
+- **`SKIPPED — required API not enabled`** — that Google API isn't turned on in
+  the project (e.g. API Keys API). Nothing to validate; enable the API only if
+  you actually use it.
+- **`TRANSIENT network error — re-run`** — a one-off socket/timeout; just re-run.
+
+**Recommended setup for a clean run:**
+```bash
+# a dedicated read-only service account:
+gcloud iam service-accounts create prowler-validator --project MY_PROJECT
+gcloud projects add-iam-policy-binding MY_PROJECT \
+  --member="serviceAccount:prowler-validator@MY_PROJECT.iam.gserviceaccount.com" \
+  --role="roles/viewer"
+gcloud projects add-iam-policy-binding MY_PROJECT \
+  --member="serviceAccount:prowler-validator@MY_PROJECT.iam.gserviceaccount.com" \
+  --role="roles/iam.securityReviewer"
+gcloud iam service-accounts keys create key.json \
+  --iam-account="prowler-validator@MY_PROJECT.iam.gserviceaccount.com"
+
+python run_all.py --key-file key.json --prowler out.ocsf.json -o report.xlsx
+```
+
 ## Coverage
 
 **All 109 GCP checks across 16 services are implemented** and plug into the

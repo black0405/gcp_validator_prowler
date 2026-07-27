@@ -16,6 +16,34 @@ from .models import CheckResult, Method, MethodResult, ResourceResult, Verdict
 from .prowler import ProwlerFinding
 
 
+def classify_error(exc: BaseException) -> str:
+    """Turn a raw API exception into a short, actionable message for the report.
+
+    Distinguishes the common operational causes (API not enabled, missing OAuth
+    scope, missing IAM/RBAC permission, transient network) from real failures so
+    a reviewer isn't faced with a stack trace.
+    """
+    msg = str(exc)
+    low = msg.lower()
+    etype = type(exc).__name__
+    if any(s in low for s in ("has not been used", "service_disabled", "it is disabled",
+                              "disallowedprovider", "subscriptionnotfound", "not registered to use")):
+        return f"SKIPPED — required API/provider not enabled for this account ({etype}); nothing to validate"
+    if any(s in low for s in ("insufficient authentication scopes", "access_token_scope_insufficient",
+                              "insufficient_scope")):
+        return ("AUTH SCOPE — the credential's token lacks the cloud-platform scope. Use a "
+                "service-account key (--key-file), or re-auth with cloud-platform scope. See README.")
+    if any(s in low for s in ("permission denied", "insufficient permission", "authorizationfailed",
+                              "forbidden", "does not have permission", "caller does not have")) or \
+            (etype == "HttpError" and " 403 " in f" {msg} "):
+        return f"PERMISSION DENIED — grant the credential read access (roles/viewer or equivalent) ({etype})"
+    if etype in ("BrokenPipeError", "ConnectionResetError", "ConnectionAbortedError", "TimeoutError") or \
+            any(s in low for s in ("broken pipe", "timed out", "timeout", "connection reset",
+                                   "temporarily unavailable", "connection aborted", "503")):
+        return f"TRANSIENT network error — re-run to retry ({etype}: {msg[:140]})"
+    return f"discovery failed: {etype}: {msg[:220]}"
+
+
 class BaseCheck:
     # Subclasses MUST set these.
     check_id: str = ""
@@ -99,7 +127,7 @@ class BaseCheck:
         try:
             resources = self.discover_resources(ctx)
         except Exception as exc:  # noqa: BLE001
-            result.error = f"discovery failed: {type(exc).__name__}: {exc}"
+            result.error = classify_error(exc)
             resources = []
 
         for res in resources:
