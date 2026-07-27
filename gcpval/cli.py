@@ -27,6 +27,10 @@ def add_common_args(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
     p.add_argument("--enable-exposure-probe", action="store_true",
                    help="Allow method 5 to make real outbound network connections")
     p.add_argument("--probe-timeout", type=float, default=4.0)
+    p.add_argument("--evidence-dir", "--screenshots", dest="evidence_dir", default="",
+                   help="Write a per-finding PNG audit evidence image into this directory")
+    p.add_argument("--evidence-findings-only", action="store_true",
+                   help="Only produce evidence images for likely false positives/negatives")
     p.add_argument("--verbose", "-v", action="store_true")
     return p
 
@@ -73,6 +77,28 @@ def print_check_result(result: CheckResult) -> None:
                 print(f"        {label:<20} {mr.verdict.value:<6} {mr.detail}")
 
 
+def deeplink_fn_for(ctx):
+    from .deeplinks import console_link
+    return lambda cr, rr: console_link(cr, rr, ctx.project)
+
+
+def emit_outputs(ctx, results, args) -> dict:
+    """Write the Excel report (with console-link column) and, if requested, the
+    per-finding audit evidence images."""
+    dl = deeplink_fn_for(ctx)
+    counts = write_report(results, args.out, deeplink_fn=dl)
+    print(f"Wrote {args.out}")
+    ev_dir = getattr(args, "evidence_dir", "")
+    if ev_dir:
+        from .evidence import write_evidence_images
+        n = write_evidence_images(
+            results, ev_dir, provider="GCP",
+            scope_label=f"project: {ctx.project or '(ADC default)'}",
+            deeplink_fn=dl, only_findings=getattr(args, "evidence_findings_only", False))
+        print(f"Wrote {n} evidence image(s) to {ev_dir}")
+    return counts
+
+
 def run_single(check_cls) -> None:
     """Entry point used by each per-control file's __main__ block."""
     p = add_common_args(argparse.ArgumentParser(
@@ -81,5 +107,5 @@ def run_single(check_cls) -> None:
     ctx = context_from_args(args)
     result = check_cls().run(ctx)
     print_check_result(result)
-    counts = write_report([result], args.out)
-    print(f"\nWrote {args.out}  ({counts})")
+    counts = emit_outputs(ctx, [result], args)
+    print(f"Summary: {counts}")

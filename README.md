@@ -88,6 +88,23 @@ resource identity, Prowler status + detail, each method's verdict + detail,
 consensus, and the agreement flag (colour-coded). `LIKELY_FALSE_POSITIVE`
 rows are highlighted amber.
 
+## Audit evidence (screenshots)
+
+Add `--evidence-dir DIR` (alias `--screenshots DIR`) to write a **per-finding PNG
+evidence card** — the check, resource, every method's PASS/FAIL, the actual
+config values read from the API, a UTC capture timestamp, and a Cloud Console
+deep-link. The Excel also gains a hyperlinked **Console Link** column.
+
+```bash
+python run_all.py -p MY_PROJECT --prowler out.ocsf.json --evidence-dir ./evidence
+# only the exceptions worth attaching to findings:
+python run_all.py -p MY_PROJECT --prowler out.ocsf.json --evidence-dir ./evidence --evidence-findings-only
+```
+
+Images are generated headless (Pillow) from data the tool already collected, so
+they carry provenance (API source + timestamp) suitable as audit evidence; the
+deep-link lets you also grab a live console screenshot if a reviewer wants one.
+
 ## Coverage
 
 **All 109 GCP checks across 16 services are implemented** and plug into the

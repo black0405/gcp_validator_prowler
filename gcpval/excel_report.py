@@ -17,7 +17,7 @@ COLUMNS = [
     "M3 Logs", "M3 Detail",
     "M4 Alternate", "M4 Detail",
     "M5 Exposure", "M5 Detail",
-    "Consensus", "Agreement", "Check Error",
+    "Consensus", "Agreement", "Check Error", "Console Link",
 ]
 
 # Fills for the Agreement column (openpyxl colors, ARGB).
@@ -37,14 +37,15 @@ def _m(rr: ResourceResult, method: Method):
     return r.verdict.value, r.detail
 
 
-def _rows_for_check(cr: CheckResult) -> Iterable[List[str]]:
+def _rows_for_check(cr: CheckResult, deeplink_fn=None) -> Iterable[List[str]]:
     if not cr.resources:
         # Emit one informational row so a check that found nothing is still visible.
         yield [
             cr.check_id, cr.service, cr.severity, cr.title, cr.hub_link,
             "", "", "", "", "", "",
             "", "", "", "", "", "", "", "", "", "",
-            Verdict.NA.value, INCONCLUSIVE if not cr.error else "ERROR", cr.error or "no resources evaluated",
+            Verdict.NA.value, INCONCLUSIVE if not cr.error else "ERROR",
+            cr.error or "no resources evaluated", "",
         ]
         return
     for rr in cr.resources:
@@ -53,16 +54,22 @@ def _rows_for_check(cr: CheckResult) -> Iterable[List[str]]:
         m3 = _m(rr, Method.LOGS)
         m4 = _m(rr, Method.ALTERNATE)
         m5 = _m(rr, Method.EXPOSURE)
+        link = ""
+        if deeplink_fn is not None:
+            try:
+                link = deeplink_fn(cr, rr) or ""
+            except Exception:  # noqa: BLE001
+                link = ""
         yield [
             cr.check_id, cr.service, cr.severity, cr.title, cr.hub_link,
             rr.project, rr.region, rr.resource_name, rr.resource_id,
             rr.prowler_status.value if rr.prowler_status else "", rr.prowler_detail,
             m1[0], m1[1], m2[0], m2[1], m3[0], m3[1], m4[0], m4[1], m5[0], m5[1],
-            rr.consensus().value, rr.agreement(), cr.error or "",
+            rr.consensus().value, rr.agreement(), cr.error or "", link,
         ]
 
 
-def write_report(check_results: List[CheckResult], out_path: str) -> dict:
+def write_report(check_results: List[CheckResult], out_path: str, deeplink_fn=None) -> dict:
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
@@ -75,6 +82,7 @@ def write_report(check_results: List[CheckResult], out_path: str) -> dict:
     header_fill = PatternFill("solid", fgColor="FF434343")
     hub_col = COLUMNS.index("Prowler Hub Link") + 1
     agree_col = COLUMNS.index("Agreement") + 1
+    link_col = COLUMNS.index("Console Link") + 1
 
     ws.append(COLUMNS)
     for c in range(1, len(COLUMNS) + 1):
@@ -88,7 +96,7 @@ def write_report(check_results: List[CheckResult], out_path: str) -> dict:
 
     r = 1
     for cr in sorted(check_results, key=lambda x: (x.service, x.check_id)):
-        for row in _rows_for_check(cr):
+        for row in _rows_for_check(cr, deeplink_fn):
             r += 1
             ws.append(row)
             agreement = row[agree_col - 1]
@@ -96,12 +104,13 @@ def write_report(check_results: List[CheckResult], out_path: str) -> dict:
             fill = _FILLS.get(agreement)
             if fill and fill != "FFFFFFFF":
                 ws.cell(row=r, column=agree_col).fill = PatternFill("solid", fgColor=fill)
-            # Hyperlink the hub column.
-            link = row[hub_col - 1]
-            if link:
-                hc = ws.cell(row=r, column=hub_col)
-                hc.hyperlink = link
-                hc.font = Font(color="FF1155CC", underline="single")
+            # Hyperlink the hub + console-link columns.
+            for col in (hub_col, link_col):
+                link = row[col - 1]
+                if link:
+                    hc = ws.cell(row=r, column=col)
+                    hc.hyperlink = link
+                    hc.font = Font(color="FF1155CC", underline="single")
 
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = f"A1:{get_column_letter(len(COLUMNS))}{r}"
@@ -111,6 +120,7 @@ def write_report(check_results: List[CheckResult], out_path: str) -> dict:
         "Prowler Hub Link": 46, "Project": 18, "Region": 14,
         "Resource Name": 26, "Resource ID": 34, "Prowler Status": 13,
         "Prowler Detail": 40, "Consensus": 11, "Agreement": 22, "Check Error": 30,
+        "Console Link": 50,
     }
     for i, name in enumerate(COLUMNS, start=1):
         ws.column_dimensions[get_column_letter(i)].width = widths.get(name, 30)

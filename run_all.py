@@ -20,8 +20,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from gcpval.cli import add_common_args, context_from_args, print_check_result  # noqa: E402
-from gcpval.excel_report import write_report  # noqa: E402
+from gcpval.cli import add_common_args, context_from_args, emit_outputs, print_check_result  # noqa: E402
 from gcpval.runner import discover_check_classes, run_checks  # noqa: E402
 
 
@@ -55,8 +54,7 @@ def main() -> None:
     results = run_checks(classes, ctx)
     for r in results:
         print_check_result(r)
-    counts = write_report(results, args.out)
-    print(f"\nWrote {args.out}")
+    counts = emit_outputs(ctx, results, args)
     print(f"Summary: {counts}")
 
 
